@@ -1,0 +1,27 @@
+{
+  "title": "User",
+  "description": "A registered user",
+  "type": "object",
+  "properties": {
+    "id":      { "type": "integer" },
+    "email":   { "type": "string" },
+    "name":    { "type": "string" },
+    "role":    { "$ref": "#/$defs/Role" },
+    "address": { "$ref": "#/$defs/Address" }
+  },
+  "required": ["id", "email", "name", "role"],
+  "$defs": {
+    "Role": {
+      "enum": ["admin", "user", "guest"]
+    },
+    "Address": {
+      "type": "object",
+      "properties": {
+        "street":   { "type": "string" },
+        "city":     { "type": "string" },
+        "zip-code": { "type": "string" }
+      },
+      "required": ["street", "city"]
+    }
+  }
+}
