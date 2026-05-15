@@ -7,7 +7,7 @@ A SwiftPM build tool plugin that generates `Codable` Swift types from `.schema.j
 Add the package as a dependency and apply `JSONSchemaPlugin` to any target:
 
 ```swift
-.package(url: "...", from: "..."),
+.package(url: "https://github.com/wendylabsinc/swift-json-schema.git", from: "0.1.0"),
 
 .target(
     name: "MyTarget",
