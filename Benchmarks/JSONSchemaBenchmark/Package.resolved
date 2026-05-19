@@ -1,5 +1,5 @@
 {
-  "originHash" : "daa41c4ad936e98877c4138d7a9ef49e228b89bac3c0f0b23a2b69e4303f4c29",
+  "originHash" : "65a30cc1e7a5aca93d14d4c4ef705910051bbfca59ccc320e8feba289cdac603",
   "pins" : [
     {
       "identity" : "hdrhistogram-swift",
@@ -53,6 +53,15 @@
       "state" : {
         "revision" : "fea17c02d767f46b23070fdfdacc28a03a39232a",
         "version" : "1.5.1"
+      }
+    },
+    {
+      "identity" : "swift-json",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/orlandos-nl/swift-json.git",
+      "state" : {
+        "revision" : "528c83521d7304b3e851090d43c1d45df4de29bf",
+        "version" : "2.5.0"
       }
     },
     {

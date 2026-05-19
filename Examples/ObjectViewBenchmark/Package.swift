@@ -6,7 +6,7 @@ let package = Package(
     platforms: [.macOS(.v14)],
     dependencies: [
         .package(name: "swift-json-schema", path: "../..", traits: ["SwiftJSON"]),
-        .package(path: "/Users/joannisorlandos/git/orlandos-nl/swift-json"),
+        .package(url: "https://github.com/orlandos-nl/swift-json.git", from: "2.5.0"),
     ],
     targets: [
         .executableTarget(

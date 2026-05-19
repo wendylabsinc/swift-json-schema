@@ -11,7 +11,7 @@ let package = Package(
         .trait(name: "SwiftJSON", description: "Generate Span<UInt8> initializers using IkigaJSON"),
     ],
     dependencies: [
-        .package(path: "/Users/joannisorlandos/git/orlandos-nl/swift-json"),
+        .package(url: "https://github.com/orlandos-nl/swift-json.git", from: "2.5.0"),
     ],
     targets: [
         .plugin(
