@@ -1,4 +1,4 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 6.1
 import PackageDescription
 
 let package = Package(
@@ -7,15 +7,19 @@ let package = Package(
     products: [
         .plugin(name: "JSONSchemaPlugin", targets: ["JSONSchemaPlugin"]),
     ],
+    traits: [
+        .trait(name: "SwiftJSON", description: "Generate Span<UInt8> initializers using IkigaJSON"),
+    ],
+    dependencies: [
+        .package(path: "/Users/joannisorlandos/git/orlandos-nl/swift-json"),
+    ],
     targets: [
         .plugin(
             name: "JSONSchemaPlugin",
             capability: .buildTool(),
             dependencies: ["JSONSchemaGenerator"]
         ),
-        .target(
-            name: "JSONSchemaGeneratorCore"
-        ),
+        .target(name: "JSONSchemaGeneratorCore"),
         .executableTarget(
             name: "JSONSchemaGenerator",
             dependencies: ["JSONSchemaGeneratorCore"]

@@ -14,7 +14,11 @@ struct JSONSchemaPlugin: BuildToolPlugin {
             return .buildCommand(
                 displayName: "Generating \(baseName).swift from \(file.url.lastPathComponent)",
                 executable: generator.url,
-                arguments: [file.url.path(percentEncoded: false), outputURL.path(percentEncoded: false)],
+                arguments: [
+                    file.url.path(percentEncoded: false),
+                    outputURL.path(percentEncoded: false),
+                    "--swift-json",
+                ],
                 inputFiles: [file.url],
                 outputFiles: [outputURL]
             )

@@ -1,0 +1,43 @@
+{
+  "title": "Order",
+  "type": "object",
+  "properties": {
+    "orderId":    { "type": "integer" },
+    "status":     { "$ref": "#/$defs/OrderStatus" },
+    "customerId": { "type": "integer" },
+    "createdAt":  { "type": "string" },
+    "total":      { "type": "number" },
+    "currency":   { "type": "string" },
+    "items":      { "type": "array", "items": { "$ref": "#/$defs/LineItem" } },
+    "shipping":   { "$ref": "#/$defs/ShippingAddress" },
+    "notes":      { "type": "string" }
+  },
+  "required": ["orderId", "status", "customerId", "createdAt", "total", "currency", "items", "shipping"],
+  "$defs": {
+    "OrderStatus": {
+      "enum": ["pending", "confirmed", "shipped", "delivered", "cancelled"]
+    },
+    "LineItem": {
+      "type": "object",
+      "properties": {
+        "productId": { "type": "integer" },
+        "sku":       { "type": "string" },
+        "name":      { "type": "string" },
+        "quantity":  { "type": "integer" },
+        "unitPrice": { "type": "number" }
+      },
+      "required": ["productId", "sku", "name", "quantity", "unitPrice"]
+    },
+    "ShippingAddress": {
+      "type": "object",
+      "properties": {
+        "name":       { "type": "string" },
+        "street":     { "type": "string" },
+        "city":       { "type": "string" },
+        "postalCode": { "type": "string" },
+        "country":    { "type": "string" }
+      },
+      "required": ["name", "street", "city", "postalCode", "country"]
+    }
+  }
+}

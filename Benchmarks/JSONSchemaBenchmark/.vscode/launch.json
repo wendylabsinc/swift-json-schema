@@ -1,0 +1,32 @@
+{
+    "configurations": [
+        {
+            "type": "wendy",
+            "name": "Debug JSONSchemaBenchmark with Wendy",
+            "request": "attach",
+            "target": "JSONSchemaBenchmark",
+            "cwd": "${workspaceFolder:JSONSchemaBenchmark}",
+            "preLaunchTask": "wendy: Run JSONSchemaBenchmark"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:JSONSchemaBenchmark}",
+            "name": "Debug JSONSchemaBenchmark",
+            "target": "JSONSchemaBenchmark",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug JSONSchemaBenchmark"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:JSONSchemaBenchmark}",
+            "name": "Release JSONSchemaBenchmark",
+            "target": "JSONSchemaBenchmark",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release JSONSchemaBenchmark"
+        }
+    ]
+}

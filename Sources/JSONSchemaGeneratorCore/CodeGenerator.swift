@@ -4,10 +4,20 @@ public struct CodeGenerator {
         case unsupportedPropertyType(property: String, context: String)
     }
 
-    let resolved: ResolvedSchema
+    public struct Options: Sendable {
+        public var generateSpanInits: Bool
 
-    public init(resolved: ResolvedSchema) {
+        public init(generateSpanInits: Bool = false) {
+            self.generateSpanInits = generateSpanInits
+        }
+    }
+
+    let resolved: ResolvedSchema
+    let options: Options
+
+    public init(resolved: ResolvedSchema, options: Options = Options()) {
         self.resolved = resolved
+        self.options = options
     }
 
     public func generate() throws -> String {
@@ -15,6 +25,9 @@ public struct CodeGenerator {
             throw GeneratorError.missingTitle
         }
         var parts: [String] = []
+        if options.generateSpanInits {
+            parts.append("#if canImport(IkigaJSON)\nimport IkigaJSON\nimport JSONSchemaSwiftJSON\n#endif")
+        }
         for (name, def) in resolved.defs.sorted(by: { $0.key < $1.key }) {
             parts.append(try generateType(name: IdentifierSanitizer.typeName(from: name), schema: def))
         }
@@ -35,17 +48,6 @@ public struct CodeGenerator {
     // MARK: - Struct
 
     private func generateStruct(name: String, schema: JSONSchema) throws -> String {
-        struct PropInfo {
-            let jsonKey: String
-            let swiftKey: String
-            let typeStr: String
-            let isRequired: Bool
-            let minItems: Int?
-            let maxItems: Int?
-            let uniqueItems: Bool?
-            var hasConstraints: Bool { minItems != nil || maxItems != nil || uniqueItems == true }
-        }
-
         var lines: [String] = []
         if let desc = schema.description { lines.append("/// \(desc)") }
         lines.append("struct \(name): Codable, Hashable {")
@@ -122,8 +124,358 @@ public struct CodeGenerator {
             lines.append("    }")
         }
 
+        if options.generateSpanInits {
+            lines.append("")
+            lines.append("#if canImport(IkigaJSON)")
+            lines.append(contentsOf: generateSpanInit(info: info))
+            lines.append("")
+            lines.append(contentsOf: generateObjectViewInit(info: info))
+            lines.append("")
+            lines.append(contentsOf: generateJSONObjectInit(info: info))
+            lines.append("#endif")
+        }
+
         lines.append("}")
         return lines.joined(separator: "\n")
+    }
+
+    // MARK: - Span / JSONObject / JSONObjectView inits
+
+    private func generateSpanInit(info: [PropInfo]) -> [String] {
+        return [
+            "    init(json span: Span<UInt8>) throws {",
+            "        let view = try JSONObjectView(span: span)",
+            "        try self.init(view: view)",
+            "    }",
+        ]
+    }
+
+    private func generateObjectViewInit(info: [PropInfo]) -> [String] {
+        var lines = ["    init(view: borrowing JSONObjectView) throws {"]
+        for entry in info {
+            lines.append(contentsOf: generateObjectViewFieldAccess(entry: entry))
+        }
+        lines.append("    }")
+        return lines
+    }
+
+    private func viewTypedMethod(for jsonValueProperty: String) -> String {
+        switch jsonValueProperty {
+        case "int":  return "integer"
+        case "bool": return "boolean"
+        default:     return jsonValueProperty
+        }
+    }
+
+    private func generateObjectViewFieldAccess(entry: PropInfo) -> [String] {
+        let swiftKey = entry.swiftKey
+        let jsonKey  = entry.jsonKey
+        let typeStr  = entry.typeStr
+        let mustExist = entry.isRequired && !typeStr.hasSuffix("?")
+
+        switch jsonAccessor(for: typeStr) {
+        case .scalar(let prop):
+            let method = viewTypedMethod(for: prop)
+            if mustExist {
+                return [
+                    "        guard let \(swiftKey) = try view.\(method)(forKey: \"\(jsonKey)\") else {",
+                    "            throw JSONObjectError.expectedObject",
+                    "        }",
+                    "        self.\(swiftKey) = \(swiftKey)",
+                ]
+            } else {
+                return ["        self.\(swiftKey) = try view.\(method)(forKey: \"\(jsonKey)\")"]
+            }
+
+        case .enumType(let typeName, let rawProperty):
+            let method = viewTypedMethod(for: rawProperty)
+            if mustExist {
+                return [
+                    "        guard let \(swiftKey)Raw = try view.\(method)(forKey: \"\(jsonKey)\"),",
+                    "              let \(swiftKey) = \(typeName)(rawValue: \(swiftKey)Raw) else {",
+                    "            throw JSONObjectError.expectedObject",
+                    "        }",
+                    "        self.\(swiftKey) = \(swiftKey)",
+                ]
+            } else {
+                return [
+                    "        self.\(swiftKey) = try view.\(method)(forKey: \"\(jsonKey)\").flatMap(\(typeName).init(rawValue:))",
+                ]
+            }
+
+        case .nestedObject(let typeName):
+            if mustExist {
+                return [
+                    "        guard let \(swiftKey) = try view.withObjectView(forKey: \"\(jsonKey)\", perform: { subView in",
+                    "            try \(typeName)(view: subView)",
+                    "        }) else {",
+                    "            throw JSONObjectError.expectedObject",
+                    "        }",
+                    "        self.\(swiftKey) = \(swiftKey)",
+                ]
+            } else {
+                return [
+                    "        self.\(swiftKey) = try view.withObjectView(forKey: \"\(jsonKey)\") { subView in",
+                    "            try \(typeName)(view: subView)",
+                    "        }",
+                ]
+            }
+
+        case .array(let element):
+            return generateObjectViewArrayAccess(swiftKey: swiftKey, jsonKey: jsonKey, element: element, mustExist: mustExist)
+
+        case .unsupported:
+            return ["        self.\(swiftKey) = /* unsupported type */"]
+        }
+    }
+
+    private func generateObjectViewArrayAccess(
+        swiftKey: String, jsonKey: String, element: JSONValueAccessor, mustExist: Bool
+    ) -> [String] {
+        let elementLines: [String]
+        switch element {
+        case .scalar(let prop):
+            let method = viewTypedMethod(for: prop)
+            elementLines = [
+                "                guard let value = try arrayView.\(method)(forIndex: i) else {",
+                "                    throw JSONObjectError.expectedObject",
+                "                }",
+                "                elements.append(value)",
+            ]
+        case .enumType(let typeName, let rawProperty):
+            let method = viewTypedMethod(for: rawProperty)
+            elementLines = [
+                "                guard let raw = try arrayView.\(method)(forIndex: i),",
+                "                      let value = \(typeName)(rawValue: raw) else {",
+                "                    throw JSONObjectError.expectedObject",
+                "                }",
+                "                elements.append(value)",
+            ]
+        case .nestedObject(let typeName):
+            elementLines = [
+                "                guard let value = try arrayView.withObjectView(forIndex: i, perform: { subView in",
+                "                    try \(typeName)(view: subView)",
+                "                }) else {",
+                "                    throw JSONObjectError.expectedObject",
+                "                }",
+                "                elements.append(value)",
+            ]
+        case .array, .unsupported:
+            return ["        self.\(swiftKey) = []"]
+        }
+
+        let innerType: String
+        switch element {
+        case .scalar(let prop):
+            switch prop {
+            case "string": innerType = "String"
+            case "int":    innerType = "Int"
+            case "double": innerType = "Double"
+            case "bool":   innerType = "Bool"
+            default:       innerType = "Any"
+            }
+        case .enumType(let typeName, _): innerType = typeName
+        case .nestedObject(let typeName): innerType = typeName
+        case .array, .unsupported: innerType = "Any"
+        }
+
+        let body = [
+            "            var elements: [\(innerType)] = []",
+            "            elements.reserveCapacity(arrayView.count)",
+            "            for i in 0..<arrayView.count {",
+        ] + elementLines + [
+            "            }",
+            "            return elements",
+        ]
+
+        if mustExist {
+            return [
+                "        guard let \(swiftKey) = try view.withArrayView(forKey: \"\(jsonKey)\", perform: { arrayView in",
+            ] + body + [
+                "        }) else {",
+                "            throw JSONObjectError.expectedObject",
+                "        }",
+                "        self.\(swiftKey) = \(swiftKey)",
+            ]
+        } else {
+            return [
+                "        self.\(swiftKey) = try view.withArrayView(forKey: \"\(jsonKey)\") { arrayView in",
+            ] + body + [
+                "        }",
+            ]
+        }
+    }
+
+    private func generateJSONObjectInit(info: [PropInfo]) -> [String] {
+        var lines: [String] = []
+        lines.append("    init(json: JSONObject) throws {")
+        for entry in info {
+            lines.append(contentsOf: generateJSONFieldAccess(entry: entry))
+        }
+        lines.append("    }")
+        return lines
+    }
+
+    private indirect enum JSONValueAccessor {
+        case scalar(property: String)
+        case enumType(typeName: String, rawProperty: String)
+        case nestedObject(typeName: String)
+        case array(element: JSONValueAccessor)
+        case unsupported
+    }
+
+    private func isEnumDef(_ typeName: String) -> Bool {
+        resolved.defs.contains { IdentifierSanitizer.typeName(from: $0.key) == typeName && $0.value.enumValues != nil }
+    }
+
+    private func isIntEnumDef(_ typeName: String) -> Bool {
+        guard let schema = resolved.defs.first(where: { IdentifierSanitizer.typeName(from: $0.key) == typeName })?.value,
+              let values = schema.enumValues else { return false }
+        return values.allSatisfy { if case .integer = $0 { return true }; return false }
+    }
+
+    private func jsonAccessor(for typeStr: String) -> JSONValueAccessor {
+        let base = typeStr.hasSuffix("?") ? String(typeStr.dropLast()) : typeStr
+        if base.hasPrefix("[") && base.hasSuffix("]") {
+            let inner = String(base.dropFirst().dropLast())
+            let elementAccessor = jsonAccessor(for: inner)
+            if case .unsupported = elementAccessor { return .unsupported }
+            return .array(element: elementAccessor)
+        }
+        switch base {
+        case "String": return .scalar(property: "string")
+        case "Int":    return .scalar(property: "int")
+        case "Double": return .scalar(property: "double")
+        case "Bool":   return .scalar(property: "bool")
+        case "Void", "Any": return .unsupported
+        default:
+            if isIntEnumDef(base) { return .enumType(typeName: base, rawProperty: "int") }
+            if isEnumDef(base)    { return .enumType(typeName: base, rawProperty: "string") }
+            return .nestedObject(typeName: base)
+        }
+    }
+
+    private struct PropInfo {
+        let jsonKey: String
+        let swiftKey: String
+        let typeStr: String
+        let isRequired: Bool
+        let minItems: Int?
+        let maxItems: Int?
+        let uniqueItems: Bool?
+        var hasConstraints: Bool { minItems != nil || maxItems != nil || uniqueItems == true }
+    }
+
+    private func generateJSONFieldAccess(entry: PropInfo) -> [String] {
+        let swiftKey = entry.swiftKey
+        let jsonKey  = entry.jsonKey
+        let typeStr  = entry.typeStr
+        let isOptional = typeStr.hasSuffix("?")
+        let mustExist  = entry.isRequired && !isOptional
+
+        switch jsonAccessor(for: typeStr) {
+        case .scalar(let prop):
+            if mustExist {
+                return [
+                    "        guard let \(swiftKey) = json[\"\(jsonKey)\"]?.\(prop) else {",
+                    "            throw JSONObjectError.expectedObject",
+                    "        }",
+                    "        self.\(swiftKey) = \(swiftKey)",
+                ]
+            } else {
+                return ["        self.\(swiftKey) = json[\"\(jsonKey)\"]?.\(prop)"]
+            }
+
+        case .enumType(let typeName, let rawProperty):
+            if mustExist {
+                return [
+                    "        guard let \(swiftKey)Raw = json[\"\(jsonKey)\"]?.\(rawProperty),",
+                    "              let \(swiftKey) = \(typeName)(rawValue: \(swiftKey)Raw) else {",
+                    "            throw JSONObjectError.expectedObject",
+                    "        }",
+                    "        self.\(swiftKey) = \(swiftKey)",
+                ]
+            } else {
+                return [
+                    "        self.\(swiftKey) = json[\"\(jsonKey)\"]?.\(rawProperty).flatMap(\(typeName).init(rawValue:))",
+                ]
+            }
+
+        case .nestedObject(let typeName):
+            if mustExist {
+                return [
+                    "        guard let \(swiftKey)JSON = json[\"\(jsonKey)\"]?.object else {",
+                    "            throw JSONObjectError.expectedObject",
+                    "        }",
+                    "        self.\(swiftKey) = try \(typeName)(json: \(swiftKey)JSON)",
+                ]
+            } else {
+                return [
+                    "        if let \(swiftKey)JSON = json[\"\(jsonKey)\"]?.object {",
+                    "            self.\(swiftKey) = try \(typeName)(json: \(swiftKey)JSON)",
+                    "        } else {",
+                    "            self.\(swiftKey) = nil",
+                    "        }",
+                ]
+            }
+
+        case .array(let element):
+            return generateJSONArrayAccess(swiftKey: swiftKey, jsonKey: jsonKey, element: element, mustExist: mustExist)
+
+        case .unsupported:
+            return ["        self.\(swiftKey) = /* unsupported type, use Codable init */"]
+        }
+    }
+
+    private func generateJSONArrayAccess(
+        swiftKey: String, jsonKey: String, element: JSONValueAccessor, mustExist: Bool
+    ) -> [String] {
+        let mapBody: [String]
+        switch element {
+        case .scalar(let prop):
+            mapBody = [
+                "            guard let value = element.\(prop) else {",
+                "                throw JSONObjectError.expectedObject",
+                "            }",
+                "            return value",
+            ]
+        case .enumType(let typeName, let rawProperty):
+            mapBody = [
+                "            guard let raw = element.\(rawProperty),",
+                "                  let value = \(typeName)(rawValue: raw) else {",
+                "                throw JSONObjectError.expectedObject",
+                "            }",
+                "            return value",
+            ]
+        case .nestedObject(let typeName):
+            mapBody = [
+                "            guard let obj = element.object else {",
+                "                throw JSONObjectError.expectedObject",
+                "            }",
+                "            return try \(typeName)(json: obj)",
+            ]
+        case .array, .unsupported:
+            return ["        self.\(swiftKey) = []  // nested arrays unsupported in swift-json init"]
+        }
+
+        if mustExist {
+            return [
+                "        guard let \(swiftKey)Array = json[\"\(jsonKey)\"]?.array else {",
+                "            throw JSONObjectError.expectedObject",
+                "        }",
+                "        self.\(swiftKey) = try \(swiftKey)Array.map { element in",
+            ] + mapBody + ["        }"]
+        } else {
+            return [
+                "        if let \(swiftKey)Array = json[\"\(jsonKey)\"]?.array {",
+                "            self.\(swiftKey) = try \(swiftKey)Array.map { element in",
+            ] + mapBody.map { "    " + $0 } + [
+                "            }",
+                "        } else {",
+                "            self.\(swiftKey) = nil",
+                "        }",
+            ]
+        }
     }
 
     private func generateArrayValidation(

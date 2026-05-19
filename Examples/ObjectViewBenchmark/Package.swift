@@ -2,15 +2,15 @@
 import PackageDescription
 
 let package = Package(
-    name: "UserDecoder",
-    platforms: [.macOS(.v13)],
+    name: "ObjectViewBenchmark",
+    platforms: [.macOS(.v14)],
     dependencies: [
         .package(name: "swift-json-schema", path: "../..", traits: ["SwiftJSON"]),
         .package(path: "/Users/joannisorlandos/git/orlandos-nl/swift-json"),
     ],
     targets: [
         .executableTarget(
-            name: "UserDecoder",
+            name: "ObjectViewBenchmark",
             dependencies: [
                 .product(name: "IkigaJSON", package: "swift-json"),
             ],

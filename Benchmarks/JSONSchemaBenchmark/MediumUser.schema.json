@@ -1,0 +1,28 @@
+{
+  "title": "MediumUser",
+  "type": "object",
+  "$defs": {
+    "Settings": {
+      "type": "object",
+      "properties": {
+        "theme": { "type": "string" },
+        "notifications": { "type": "boolean" },
+        "language": { "type": "string" }
+      },
+      "required": ["theme", "notifications", "language"]
+    }
+  },
+  "properties": {
+    "id": { "type": "integer" },
+    "username": { "type": "string" },
+    "email": { "type": "string" },
+    "firstName": { "type": "string" },
+    "lastName": { "type": "string" },
+    "age": { "type": "integer" },
+    "isActive": { "type": "boolean" },
+    "createdAt": { "type": "string" },
+    "roles": { "type": "array", "items": { "type": "string" } },
+    "settings": { "$ref": "#/$defs/Settings" }
+  },
+  "required": ["id", "username", "email", "firstName", "lastName", "age", "isActive", "createdAt", "roles", "settings"]
+}

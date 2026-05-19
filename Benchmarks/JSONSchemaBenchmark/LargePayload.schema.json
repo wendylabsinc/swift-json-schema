@@ -1,0 +1,47 @@
+{
+  "title": "LargePayload",
+  "type": "object",
+  "$defs": {
+    "BenchSettings": {
+      "type": "object",
+      "properties": {
+        "theme": { "type": "string" },
+        "notifications": { "type": "boolean" },
+        "language": { "type": "string" }
+      },
+      "required": ["theme", "notifications", "language"]
+    },
+    "BenchUser": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "integer" },
+        "username": { "type": "string" },
+        "email": { "type": "string" },
+        "firstName": { "type": "string" },
+        "lastName": { "type": "string" },
+        "age": { "type": "integer" },
+        "isActive": { "type": "boolean" },
+        "createdAt": { "type": "string" },
+        "roles": { "type": "array", "items": { "type": "string" } },
+        "settings": { "$ref": "#/$defs/BenchSettings" }
+      },
+      "required": ["id", "username", "email", "firstName", "lastName", "age", "isActive", "createdAt", "roles", "settings"]
+    },
+    "BenchMetadata": {
+      "type": "object",
+      "properties": {
+        "total": { "type": "integer" },
+        "page": { "type": "integer" },
+        "perPage": { "type": "integer" },
+        "totalPages": { "type": "integer" }
+      },
+      "required": ["total", "page", "perPage", "totalPages"]
+    }
+  },
+  "properties": {
+    "users": { "type": "array", "items": { "$ref": "#/$defs/BenchUser" } },
+    "metadata": { "$ref": "#/$defs/BenchMetadata" },
+    "tags": { "type": "array", "items": { "type": "string" } }
+  },
+  "required": ["users", "metadata", "tags"]
+}

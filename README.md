@@ -21,6 +21,85 @@ See [`Examples/UserDecoder/`](Examples/UserDecoder/) for a working end-to-end ex
 
 ---
 
+## SwiftJSON trait — zero-copy `Span<UInt8>` initializers
+
+Enable the `SwiftJSON` package trait to generate additional `init(_ span: Span<UInt8>)` and `init(json: JSONObject)` initializers on every struct. These bypass `Codable` entirely and decode directly via [IkigaJSON](https://github.com/orlandos-nl/swift-json), which is useful in NIO pipelines where bytes already live in a contiguous buffer.
+
+### Enabling the trait
+
+```swift
+// swift-tools-version: 6.1
+import PackageDescription
+
+let package = Package(
+    name: "MyPackage",
+    dependencies: [
+        .package(url: "...", traits: ["SwiftJSON"])
+    ],
+    targets: [
+        .target(
+            name: "MyTarget",
+            dependencies: [
+                .product(name: "JSONSchemaSwiftJSON", package: "swift-json-schema"),
+            ],
+            plugins: [.plugin(name: "JSONSchemaPlugin", package: "swift-json-schema")]
+        )
+    ]
+)
+```
+
+Two things are required beyond the basic setup:
+1. Pass `traits: ["SwiftJSON"]` on the package dependency so IkigaJSON is fetched.
+2. Add `JSONSchemaSwiftJSON` as a library dependency — it provides the `_spanToJSONObject` bridge helper.
+
+### Generated output
+
+For every generated struct the plugin emits an extra block guarded by `#if canImport(IkigaJSON)`:
+
+```swift
+#if canImport(IkigaJSON)
+    init(_ span: Span<UInt8>) throws {
+        try self.init(json: _spanToJSONObject(span))
+    }
+
+    init(json: JSONObject) throws {
+        guard let name = json["name"]?.string else {
+            throw JSONObjectError.expectedObject
+        }
+        self.name = name
+        // …one line per property
+    }
+#endif
+```
+
+`init(json:)` is the main entry point when you already have a parsed `JSONObject`. `init(_ span:)` is a zero-copy convenience for NIO pipelines: it converts a `Span<UInt8>` into a `ByteBuffer` and parses it without an intermediate `Data` allocation.
+
+Both inits are compiled only when IkigaJSON is actually available (`#if canImport(IkigaJSON)`), so targets that do not enable the trait compile the same `Codable`-only output they always did.
+
+### Using `init(json:)` from Foundation `Data`
+
+```swift
+#if canImport(IkigaJSON)
+import IkigaJSON
+let json = try JSONObject(data: data)
+let user = try User(json: json)
+#else
+let user = try JSONDecoder().decode(User.self, from: data)
+#endif
+```
+
+### Using `init(_ span:)` in a NIO pipeline
+
+```swift
+#if canImport(IkigaJSON)
+import IkigaJSON
+// `bytes` is a Span<UInt8> over bytes already in a ByteBuffer
+let user = try User(bytes)
+#endif
+```
+
+---
+
 ## Supported JSON Schema keywords
 
 ### `title`
