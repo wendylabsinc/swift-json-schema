@@ -27,9 +27,12 @@ jobs:
         xcode-version: latest-stable
     - name: Checkout
       uses: actions/checkout@v6
-    - name: Build
-      run: |
-        swift build
+    - name: Test
+      run: swift test
+    - name: Build Examples (UserDecoder)
+      run: swift build --package-path Examples/UserDecoder
+    - name: Build Examples (ObjectViewBenchmark)
+      run: swift build -c release --package-path Examples/ObjectViewBenchmark
 
   linux:
     runs-on: ubuntu-latest
@@ -43,8 +46,7 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v6
     - name: Test
-      run: |
-        swift test --enable-code-coverage
+      run: swift test --enable-code-coverage
     - name: Convert coverage files
       run: |
         llvm-cov export -format="lcov" \
