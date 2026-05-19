@@ -6,13 +6,12 @@ let package = Package(
     platforms: [.macOS(.v13)],
     dependencies: [
         .package(name: "swift-json-schema", path: "../..", traits: ["SwiftJSON"]),
-        .package(path: "/Users/joannisorlandos/git/orlandos-nl/swift-json"),
     ],
     targets: [
         .executableTarget(
             name: "UserDecoder",
             dependencies: [
-                .product(name: "IkigaJSON", package: "swift-json"),
+                .product(name: "JSONSchemaSwiftJSON", package: "swift-json-schema"),
             ],
             plugins: [.plugin(name: "JSONSchemaPlugin", package: "swift-json-schema")]
         )
