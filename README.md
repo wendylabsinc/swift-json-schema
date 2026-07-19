@@ -1,6 +1,10 @@
 # swift-json-schema
 
-A SwiftPM build tool plugin that generates `Codable` Swift types from `.schema.json` files (JSON Schema Draft 2020-12) at compile time.
+An **Embedded Swift–compatible JSON parser built on code generation** — a first-class alternative to `Codable`.
+
+A SwiftPM build tool plugin reads your `.schema.json` files (JSON Schema Draft 2020-12) at compile time and generates concrete Swift types with hand-written decoding initializers. Because the decoding logic is generated ahead of time rather than driven by reflection or the `Codable` machinery, it is designed to run in **Embedded Swift**, carries no runtime metadata dependencies, and — with the [`SwiftJSON` trait](#swiftjson-trait--zero-copy-spanuint8-initializers) — decodes directly from a zero-copy `Span<UInt8>`, faster and with fewer allocations than `Codable` (see [Performance](#performance)).
+
+Generated types *also* conform to `Codable` so they drop straight into existing `JSONEncoder`/`JSONDecoder` code — but the codegen-based parser is the primary path, and `Codable` conformance is a convenience on top of it.
 
 ## Usage
 
